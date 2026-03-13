@@ -3,30 +3,90 @@ title: "Estimativas de População Urbana e Rural"
 author: "Equipe CEPES/IERI"
 format:
   pdf:
-    toc: true
-    number-sections: true
+    documentclass: article
+    papersize: a4
+    fontsize: 11pt
+    linestretch: 1.4
+    geometry:
+      - top=2.5cm
+      - bottom=2.5cm
+      - left=3cm
+      - right=2.5cm
+    number-sections: false
+    colorlinks: true
+    linkcolor: "NavyBlue"
+    urlcolor: "NavyBlue"
+    include-in-header:
+      text: |
+        \usepackage{fancyhdr}
+        \usepackage{graphicx}
+        \usepackage{xcolor}
+        \usepackage{titling}
+        \usepackage{titlesec}
+        \usepackage{parskip}
+        \definecolor{azulcepes}{RGB}{30, 80, 140}
+        \pagestyle{fancy}
+        \fancyhf{}
+        \fancyhead[L]{\small\textcolor{azulcepes}{\textit{Estimativas de População Urbana e Rural}}}
+        \fancyhead[R]{\small\textcolor{azulcepes}{\textit{CEPES/IERI}}}
+        \fancyfoot[C]{\small\thepage}
+        \renewcommand{\headrulewidth}{0.4pt}
+        \renewcommand{\footrulewidth}{0pt}
+        \titleformat{\section}{\large\bfseries\color{azulcepes}}{}{0em}{}[\titlerule]
+        \titlespacing{\section}{0pt}{18pt}{8pt}
 execute:
   echo: false
   warning: false
   message: false
-output-file: "../output/estimacao_pop_urb_rur.pdf"
 lang: pt-BR
 ---
 
-```{r}
+```{r setup}
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(scales)
+
+# Paleta e tema personalizados
+cores_tipo   <- c("Urbana" = "#1E508C", "Rural"  = "#E07B39")
+cores_regiao <- c(
+  "Norte"         = "#2196A6",
+  "Nordeste"      = "#E07B39",
+  "Sudeste"       = "#1E508C",
+  "Sul"           = "#6BAA3E",
+  "Centro-Oeste"  = "#9B59B6"
+)
+
+tema_cepes <- theme_minimal(base_size = 11) +
+  theme(
+    plot.title        = element_text(hjust = 0.5, face = "bold",
+                                     size = 11, color = "#1E508C",
+                                     margin = margin(b = 10)),
+    plot.subtitle     = element_text(hjust = 0.5, color = "gray40", size = 9),
+    axis.title        = element_text(size = 9, color = "gray30"),
+    axis.text         = element_text(size = 8, color = "gray40"),
+    axis.text.x       = element_text(angle = 90, vjust = 0.5),
+    panel.grid.major  = element_line(color = "gray90", linewidth = 0.4),
+    panel.grid.minor  = element_blank(),
+    panel.border      = element_rect(color = "gray70", fill = NA,
+                                     linewidth = 0.6),
+    legend.position   = "bottom",
+    legend.title      = element_text(size = 9, face = "bold"),
+    legend.text       = element_text(size = 8),
+    strip.text        = element_text(face = "bold", size = 9,
+                                     color = "#1E508C"),
+    plot.margin       = margin(8, 8, 8, 8)
+  )
 
 DIR_RAIZ <- normalizePath(file.path(getwd(), ".."), winslash = "/", mustWork = FALSE)
 source(file.path(getwd(), "funcoes_estimacao.R"))
 
-base <- readRDS(file.path(DIR_RAIZ, "raw_data", "popmun_urb_rur.rds"))
+base       <- readRDS(file.path(DIR_RAIZ, "raw_data", "popmun_urb_rur.rds"))
 base_estim <- preparar_estimativas(base)
 bases_longas <- montar_bases_longas(base_estim)
 
 estima_pop_urbana_emp <- bases_longas$urbana
-estima_pop_rural_emp <- bases_longas$rural
+estima_pop_rural_emp  <- bases_longas$rural
 ```
 
 # Introdução
@@ -35,7 +95,7 @@ A demanda por **estimativas de populações municipais por condição do domicí
 
 No Brasil, a população por condição de domicílio é registrada oficialmente nos Censos Demográficos. Por isso, para os anos intercensitários, é necessário recorrer a estimativas. Este documento apresenta a metodologia e os resultados para o Brasil e para as Grandes Regiões.
 
-[Baixar dados em Excel (populações.xlsx)](../output/populações.xlsx)
+As estimativas estão disponíveis no [repositório do GitHub](https://github.com/welbertomas/estima-pop-urb-rur) e no site do [CEPES/UFU](https://www.ieri.ufu.br/cepes/populacao/dados-e-indicadores-demograficos).
 
 # Metodologia
 
@@ -55,65 +115,67 @@ Sendo $i$ o município e $c$ a condição do domicílio (urbana ou rural).
 
 A Figura 1 apresenta as estimativas da população urbana e rural do Brasil no período 2000–2022. Os pontos em estrela marcam os anos censitários (2000, 2010 e 2022).
 
-```{r fig.align='center'}
+```{r fig-brasil, fig.align='center', fig.width=7, fig.height=3.8}
 brasil_pop_urb <- estima_pop_urbana_emp |>
   group_by(ano) |>
-  summarise(pop = sum(populacao_urbana, na.rm = TRUE) / 1e6, .groups = "drop") |>
+  summarise(pop = sum(populacao_urbana, na.rm = TRUE) / 1e6,
+            .groups = "drop") |>
   mutate(tipo = "Urbana")
 
 brasil_pop_rur <- estima_pop_rural_emp |>
   group_by(ano) |>
-  summarise(pop = sum(populacao_rural, na.rm = TRUE) / 1e6, .groups = "drop") |>
+  summarise(pop = sum(populacao_rural, na.rm = TRUE) / 1e6,
+            .groups = "drop") |>
   mutate(tipo = "Rural")
 
-brasil_pop <- bind_rows(brasil_pop_urb, brasil_pop_rur)
+brasil_pop   <- bind_rows(brasil_pop_urb, brasil_pop_rur)
+brasil_censo <- brasil_pop |> filter(ano %in% c(2000, 2010, 2022))
 
 ggplot(brasil_pop, aes(x = ano, y = pop, color = tipo)) +
-  geom_line(linewidth = 1) +
-  geom_point(data = brasil_pop |> filter(ano %in% c(2000, 2010, 2022)), shape = 8, size = 3) +
+  geom_line(linewidth = 0.9) +
+  geom_point(data = brasil_censo, shape = 8, size = 3, stroke = 1.2) +
+  scale_color_manual(values = cores_tipo) +
   scale_x_continuous(breaks = seq(2000, 2022, 1)) +
+  scale_y_continuous(labels = label_number(suffix = " M", accuracy = 1)) +
   labs(
-    title = "Figura 1 - População Urbana e Rural do Brasil (2000–2022)",
-    x = "Ano", y = "População (milhões)", color = "Situação de domicílio"
+    title  = "Figura 1 — População Urbana e Rural do Brasil (2000–2022)",
+    x      = "Ano",
+    y      = "População (milhões)",
+    color  = "Situação de domicílio"
   ) +
-  theme_minimal() +
-  theme(
-    plot.title = element_text(hjust = 0.5),
-    axis.text.x = element_text(angle = 90, vjust = 0.5),
-    panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
-    legend.position = "bottom"
-  )
+  tema_cepes
 ```
 
 A Figura 2 apresenta as estimativas para população urbana e rural por Grandes Regiões.
 
-```{r fig.align='center'}
+```{r fig-regioes, fig.align='center', fig.width=7, fig.height=6}
 urb_reg <- estima_pop_urbana_emp |>
   group_by(ano, codigo_GR, nome_GR) |>
-  summarise(pop = sum(populacao_urbana, na.rm = TRUE) / 1e6, .groups = "drop") |>
+  summarise(pop = sum(populacao_urbana, na.rm = TRUE) / 1e6,
+            .groups = "drop") |>
   mutate(tipo = "Urbana")
 
 rur_reg <- estima_pop_rural_emp |>
   group_by(ano, codigo_GR, nome_GR) |>
-  summarise(pop = sum(populacao_rural, na.rm = TRUE) / 1e6, .groups = "drop") |>
+  summarise(pop = sum(populacao_rural, na.rm = TRUE) / 1e6,
+            .groups = "drop") |>
   mutate(tipo = "Rural")
 
-pop_reg <- bind_rows(urb_reg, rur_reg)
+pop_reg      <- bind_rows(urb_reg, rur_reg)
+pop_reg_cens <- pop_reg |> filter(ano %in% c(2000, 2010, 2022))
 
 ggplot(pop_reg, aes(x = ano, y = pop, color = nome_GR)) +
-  geom_line(linewidth = 1) +
-  geom_point(data = pop_reg |> filter(ano %in% c(2000, 2010, 2022)), shape = 8, size = 3) +
+  geom_line(linewidth = 0.9) +
+  geom_point(data = pop_reg_cens, shape = 8, size = 2.5, stroke = 1) +
   facet_wrap(~tipo, ncol = 1, scales = "free_y") +
+  scale_color_manual(values = cores_regiao) +
   scale_x_continuous(breaks = seq(2000, 2022, 1)) +
+  scale_y_continuous(labels = label_number(suffix = " M", accuracy = 1)) +
   labs(
-    title = "Figura 2 - População Urbana e Rural por Grandes Regiões (2000–2022)",
-    x = "Ano", y = "População (milhões)", color = "Região"
+    title = "Figura 2 — População Urbana e Rural por Grandes Regiões (2000–2022)",
+    x     = "Ano",
+    y     = "População (milhões)",
+    color = "Região"
   ) +
-  theme_minimal() +
-  theme(
-    plot.title = element_text(hjust = 0.5),
-    axis.text.x = element_text(angle = 90, vjust = 0.5),
-    panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
-    legend.position = "bottom"
-  )
+  tema_cepes
 ```

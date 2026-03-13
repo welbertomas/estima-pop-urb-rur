@@ -12,3 +12,5 @@
 !.Rprofile
 !renv/
 !renv/**
+!output/
+!output/**
