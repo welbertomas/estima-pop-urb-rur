@@ -1,4 +1,10 @@
-# Objetivo: Preparar base com população urbana e rural municipal (2000, 2010 e 2022)
+# Objetivo: Preparar base com população urbana e rural municipal (2000, 2010 e 2022).
+#
+# Etapas:
+# 1) Baixar os dados via SIDRA para cada censo.
+# 2) Padronizar nomes e estrutura das colunas.
+# 3) Consolidar em uma base única para estimação.
+# 4) Salvar a base em raw_data/popmun_urb_rur.rds.
 
 rm(list = ls())
 

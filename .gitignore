@@ -8,3 +8,7 @@
 !script/**
 !raw_data/
 !raw_data/**
+!renv.lock
+!.Rprofile
+!renv/
+!renv/**

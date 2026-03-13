@@ -1,10 +1,15 @@
 # Objetivo: Estimar população municipal por situação do domicílio (urbano/rural)
 # para anos intercensitários entre 2000-2010 e 2010-2022.
+#
+# Etapas do script:
+# 1) Carregar a base consolidada dos censos (2000, 2010 e 2022).
+# 2) Calcular taxas geométricas e estimar anos intercensitários.
+# 3) Organizar base final em formato longo.
+# 4) Exportar planilha com nomes de colunas mais descritivos e nota metodológica.
 
 rm(list = ls())
 
 library(dplyr)
-library(tidyr)
 library(openxlsx)
 
 # Caminhos ----
@@ -13,82 +18,44 @@ DIR_RAW <- file.path(DIR_RAIZ, "raw_data")
 DIR_OUTPUT <- file.path(DIR_RAIZ, "output")
 dir.create(DIR_OUTPUT, showWarnings = FALSE, recursive = TRUE)
 
+# Funções compartilhadas ----
+source(file.path(getwd(), "funcoes_estimacao.R"))
+
 # Carregar dados ----
-estima_pop <- readRDS(file.path(DIR_RAW, "popmun_urb_rur.rds"))
+base <- readRDS(file.path(DIR_RAW, "popmun_urb_rur.rds"))
 
-# Grandes regiões ----
-estima_pop <- estima_pop |>
-  mutate(
-    codigo_GR = as.integer(codmun) %/% 1000000,
-    nome_GR = case_when(
-      codigo_GR == 1 ~ "Norte",
-      codigo_GR == 2 ~ "Nordeste",
-      codigo_GR == 3 ~ "Sudeste",
-      codigo_GR == 4 ~ "Sul",
-      codigo_GR == 5 ~ "Centro-Oeste",
-      TRUE ~ NA_character_
-    )
-  )
+# Estimativas e transformação ----
+base_estim <- preparar_estimativas(base)
+bases_longas <- montar_bases_longas(base_estim)
 
-# Taxas geométricas anuais ----
-# Fórmula: taxa = (pop_final / pop_inicial)^(1/n_anos) - 1
-estima_pop <- estima_pop |>
-  mutate(
-    taxa_cresc_urb_00_10 = (popurb_2010 / popurb_2000)^(1 / 10) - 1,
-    taxa_cresc_urb_10_22 = (popurb_2022 / popurb_2010)^(1 / 12) - 1,
-    taxa_cresc_rur_00_10 = (poprur_2010 / poprur_2000)^(1 / 10) - 1,
-    taxa_cresc_rur_10_22 = (poprur_2022 / poprur_2010)^(1 / 12) - 1
-  )
-
-# Estimar séries anuais ----
-for (ano in 2001:2009) {
-  estima_pop[[paste0("popurb_", ano)]] <- round(
-    estima_pop$popurb_2000 * (1 + estima_pop$taxa_cresc_urb_00_10)^(ano - 2000)
-  )
-  estima_pop[[paste0("poprur_", ano)]] <- round(
-    estima_pop$poprur_2000 * (1 + estima_pop$taxa_cresc_rur_00_10)^(ano - 2000)
-  )
-}
-
-for (ano in 2011:2021) {
-  estima_pop[[paste0("popurb_", ano)]] <- round(
-    estima_pop$popurb_2010 * (1 + estima_pop$taxa_cresc_urb_10_22)^(ano - 2010)
-  )
-  estima_pop[[paste0("poprur_", ano)]] <- round(
-    estima_pop$poprur_2010 * (1 + estima_pop$taxa_cresc_rur_10_22)^(ano - 2010)
-  )
-}
-
-# Formato longo ----
-estima_pop_urbana_emp <- estima_pop |>
-  select(nome_mun, codmun, nome_GR, codigo_GR, starts_with("popurb_")) |>
-  pivot_longer(
-    cols = starts_with("popurb_"),
-    names_to = "ano",
-    values_to = "populacao_urbana"
-  ) |>
-  mutate(ano = as.integer(sub("popurb_", "", ano))) |>
-  arrange(codmun, ano)
-
-estima_pop_rural_emp <- estima_pop |>
-  select(nome_mun, codmun, nome_GR, codigo_GR, starts_with("poprur_")) |>
-  pivot_longer(
-    cols = starts_with("poprur_"),
-    names_to = "ano",
-    values_to = "populacao_rural"
-  ) |>
-  mutate(ano = as.integer(sub("poprur_", "", ano))) |>
-  arrange(codmun, ano)
-
-# Consolidar ----
-df_final_pop <- estima_pop_urbana_emp |>
+df_final_pop <- bases_longas$urbana |>
   left_join(
-    estima_pop_rural_emp |> select(codmun, ano, populacao_rural),
+    bases_longas$rural |> select(codmun, ano, populacao_rural),
     by = c("codmun", "ano")
+  ) |>
+  rename(
+    `Município` = nome_mun,
+    `Código do Município` = codmun,
+    `Grande Região` = nome_GR,
+    `Código da Grande Região` = codigo_GR,
+    `Ano` = ano,
+    `População Urbana` = populacao_urbana,
+    `População Rural` = populacao_rural
   )
 
-# Salvar ----
+# Exportação para Excel ----
 wb <- createWorkbook()
 addWorksheet(wb, "Dados")
 writeData(wb, sheet = "Dados", x = df_final_pop)
-saveWorkbook(wb, file = file.path(DIR_OUTPUT, "Populacoes.xlsx"), overwrite = TRUE)
+
+ultima_linha_dados <- nrow(df_final_pop) + 1
+writeData(wb, "Dados", x = "Nota metodológica:", startCol = 1, startRow = ultima_linha_dados + 2)
+writeData(
+  wb,
+  "Dados",
+  x = "Populações municipais de 2000, 2010 e 2020: Censo Demográfico (IBGE). Demais anos, estimativas.",
+  startCol = 1,
+  startRow = ultima_linha_dados + 3
+)
+
+saveWorkbook(wb, file = file.path(DIR_OUTPUT, "populações.xlsx"), overwrite = TRUE)
