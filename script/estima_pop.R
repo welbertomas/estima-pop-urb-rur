@@ -1,95 +1,65 @@
-# Objetivo: Estimativas de população por situação do domicílio (urbano ou rural) entre
-# censos de 2000 a 2022.
+# Objetivo: Estimar população municipal por situação do domicílio (urbano/rural)
+# para anos intercensitários entre 2000-2010 e 2010-2022.
 
-rm(list=ls())
+rm(list = ls())
 
-library(tidyverse)
 library(dplyr)
+library(tidyr)
 library(openxlsx)
 
-# Caminho ----
-DIR_RAIZ   <- normalizePath("..", winslash = "/", mustWork = FALSE)
-DIR_RAW    <- file.path(DIR_RAIZ, "data_raw")
+# Caminhos ----
+DIR_RAIZ <- normalizePath(file.path(getwd(), ".."), winslash = "/", mustWork = FALSE)
+DIR_RAW <- file.path(DIR_RAIZ, "raw_data")
 DIR_OUTPUT <- file.path(DIR_RAIZ, "output")
+dir.create(DIR_OUTPUT, showWarnings = FALSE, recursive = TRUE)
 
 # Carregar dados ----
-estima_pop <- readRDS(file.path(DIR_RAW,"populacao_urb_rur.rds"))
+estima_pop <- readRDS(file.path(DIR_RAW, "popmun_urb_rur.rds"))
 
-# Calcular taxas de crescimento anual geométrica ----
-
-# Urbana entre 2000 e 2010
-estima_pop$taxa_cresc_urb_00_10 <- (estima_pop$popurb_2010 / estima_pop$popurb_2000)^(1/10) - 1
-
-# Urbana entre 2010 e 2022
-estima_pop$taxa_cresc_urb_10_22 <- (estima_pop$popurb_2022 / estima_pop$popurb_2010)^(1/12) - 1
-
-# Rural entre 2000 e 2010
-estima_pop$taxa_cresc_rur_00_10 <- (estima_pop$poprur_2010 / estima_pop$poprur_2000)^(1/10) - 1
-
-# Rural entre 2010 e 2022
-estima_pop$taxa_cresc_rur_10_22 <- (estima_pop$poprur_2022 / estima_pop$poprur_2010)^(1/12) - 1
-
-
-# Calcular populações -----
-
-# Urbana entre 2000 e 2010
-for (ano in 2001:2009) {
-  nome_coluna <- paste0("popurb_", ano)
-  estima_pop[[nome_coluna]] <- round(
-    estima_pop$popurb_2000 * ((1 + estima_pop$taxa_cresc_urb_00_10)^(ano-2000)))
-}
-
-# Urbana entre 2010 e 2022
-for (ano in 2011:2022) {
-  nome_coluna <- paste0("popurb_", ano)
-  estima_pop[[nome_coluna]] <- round(
-    estima_pop$popurb_2010 * ((1 + estima_pop$taxa_cresc_urb_10_22)^(ano-2010)))
-}
-
-# Rural entre 2000 e 2010
-for (ano in 2001:2009) {
-  nome_coluna <- paste0("poprur_", ano)
-  estima_pop[[nome_coluna]] <- round(
-    estima_pop$poprur_2000 * ((1 + estima_pop$taxa_cresc_rur_00_10)^(ano-2000)))
-}
-
-# Rural entre 2010 e 2022
-for (ano in 2011:2022) {
-  nome_coluna <- paste0("poprur_", ano)
-  estima_pop[[nome_coluna]] <- round(
-    estima_pop$poprur_2010 * ((1 + estima_pop$taxa_cresc_rur_10_22)^(ano-2010)))
-}
-
-
-# Manter apenas colunas de população urbana ----
-estima_pop_urbana <- estima_pop |>
-  select(nome_mun, codmun, nome_GR, codigo_GR, all_of(sort(grep("^popurb_", names(estima_pop), value = TRUE)))) |>
-  arrange(codmun)
-
-estima_pop_rural <- estima_pop |>
-  select(nome_mun, codmun, nome_GR, codigo_GR, all_of(sort(grep("^poprur_", names(estima_pop), value = TRUE)))) |>
-  arrange(codmun)
-
-# Nomear grandes regiões ----
+# Grandes regiões ----
 estima_pop <- estima_pop |>
   mutate(
-    codigo_GR = as.integer(codmun) %/% 1000000
-  )
-
-
-estima_pop <- estima_pop |>
-  mutate(
+    codigo_GR = as.integer(codmun) %/% 1000000,
     nome_GR = case_when(
       codigo_GR == 1 ~ "Norte",
       codigo_GR == 2 ~ "Nordeste",
-      codigo_GR == 3 ~ "Centro-Oeste",
-      codigo_GR == 4 ~ "Sudeste",
-      codigo_GR == 5 ~ "Sul"
+      codigo_GR == 3 ~ "Sudeste",
+      codigo_GR == 4 ~ "Sul",
+      codigo_GR == 5 ~ "Centro-Oeste",
+      TRUE ~ NA_character_
     )
   )
 
-# Fazer dataframe no formato "longo" (painel empilhado) ----
+# Taxas geométricas anuais ----
+# Fórmula: taxa = (pop_final / pop_inicial)^(1/n_anos) - 1
+estima_pop <- estima_pop |>
+  mutate(
+    taxa_cresc_urb_00_10 = (popurb_2010 / popurb_2000)^(1 / 10) - 1,
+    taxa_cresc_urb_10_22 = (popurb_2022 / popurb_2010)^(1 / 12) - 1,
+    taxa_cresc_rur_00_10 = (poprur_2010 / poprur_2000)^(1 / 10) - 1,
+    taxa_cresc_rur_10_22 = (poprur_2022 / poprur_2010)^(1 / 12) - 1
+  )
 
+# Estimar séries anuais ----
+for (ano in 2001:2009) {
+  estima_pop[[paste0("popurb_", ano)]] <- round(
+    estima_pop$popurb_2000 * (1 + estima_pop$taxa_cresc_urb_00_10)^(ano - 2000)
+  )
+  estima_pop[[paste0("poprur_", ano)]] <- round(
+    estima_pop$poprur_2000 * (1 + estima_pop$taxa_cresc_rur_00_10)^(ano - 2000)
+  )
+}
+
+for (ano in 2011:2021) {
+  estima_pop[[paste0("popurb_", ano)]] <- round(
+    estima_pop$popurb_2010 * (1 + estima_pop$taxa_cresc_urb_10_22)^(ano - 2010)
+  )
+  estima_pop[[paste0("poprur_", ano)]] <- round(
+    estima_pop$poprur_2010 * (1 + estima_pop$taxa_cresc_rur_10_22)^(ano - 2010)
+  )
+}
+
+# Formato longo ----
 estima_pop_urbana_emp <- estima_pop |>
   select(nome_mun, codmun, nome_GR, codigo_GR, starts_with("popurb_")) |>
   pivot_longer(
@@ -97,12 +67,8 @@ estima_pop_urbana_emp <- estima_pop |>
     names_to = "ano",
     values_to = "populacao_urbana"
   ) |>
-  mutate(
-    ano = as.integer(sub("popurb_", "", ano))
-  ) |>
+  mutate(ano = as.integer(sub("popurb_", "", ano))) |>
   arrange(codmun, ano)
-
-
 
 estima_pop_rural_emp <- estima_pop |>
   select(nome_mun, codmun, nome_GR, codigo_GR, starts_with("poprur_")) |>
@@ -111,30 +77,18 @@ estima_pop_rural_emp <- estima_pop |>
     names_to = "ano",
     values_to = "populacao_rural"
   ) |>
-  mutate(
-    ano = as.integer(sub("poprur_", "", ano))
-  ) |>
+  mutate(ano = as.integer(sub("poprur_", "", ano))) |>
   arrange(codmun, ano)
 
-# remover
-rm(list = c("estima_pop", "ano", "nome_coluna"))
-
-# Salvar ----
-# Pega todos os objetos que começam com "estima_pop_"
-populacoes <- ls(pattern = "^estima_pop_")
-
-
-df_final_pop <- estima_pop_urbana_emp %>%
+# Consolidar ----
+df_final_pop <- estima_pop_urbana_emp |>
   left_join(
-    estima_pop_rural_emp %>% select(codmun, ano, populacao_rural),
+    estima_pop_rural_emp |> select(codmun, ano, populacao_rural),
     by = c("codmun", "ano")
   )
 
-
+# Salvar ----
 wb <- createWorkbook()
 addWorksheet(wb, "Dados")
 writeData(wb, sheet = "Dados", x = df_final_pop)
-saveWorkbook(wb, file = ffile.path(DIR_OUTPUT, "Populações.xlsx"), overwrite = TRUE)
-
-
-
+saveWorkbook(wb, file = file.path(DIR_OUTPUT, "Populacoes.xlsx"), overwrite = TRUE)
