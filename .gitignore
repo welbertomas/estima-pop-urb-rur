@@ -1,0 +1,10 @@
+# Ignorar tudo por padrão
+*
+
+# Manter controle de versão apenas do necessário
+!.gitignore
+!README.md
+!script/
+!script/**
+!raw_data/
+!raw_data/**
