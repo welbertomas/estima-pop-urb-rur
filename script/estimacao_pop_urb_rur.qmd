@@ -82,7 +82,7 @@ Sendo $i$ o município e $c$ a condição do domicílio (urbana ou rural).
 
 A Figura 1 apresenta as estimativas da população urbana e rural do Brasil no período 2000–2022. Os pontos em estrela marcam os anos censitários (2000, 2010 e 2022).
 
-```{r fig-align='center'}
+```{r fig.align='center'}
 brasil_pop_urb <- estima_pop_urbana_emp |>
   group_by(ano) |>
   summarise(pop = sum(populacao_urbana, na.rm = TRUE) / 1e6, .groups = "drop") |>
@@ -114,7 +114,7 @@ ggplot(brasil_pop, aes(x = ano, y = pop, color = tipo)) +
 
 A Figura 2 apresenta as estimativas para população urbana e rural por Grandes Regiões.
 
-```{r fig-align='center'}
+```{r fig.align='center'}
 urb_reg <- estima_pop_urbana_emp |>
   group_by(ano, codigo_GR, nome_GR) |>
   summarise(pop = sum(populacao_urbana, na.rm = TRUE) / 1e6, .groups = "drop") |>
